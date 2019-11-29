@@ -1,0 +1,110 @@
+---
+title: "Job_application_application_outcomes"
+author: "KAM"
+date: "11/22/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+library(tidyverse)
+```
+
+
+## R Markdown
+```{r import data, fig.height = 3}
+job_timelines <- read.delim(file = "Job_timeline_data.tsv", header = T, stringsAsFactors = F)
+job_timelines$number <- seq(1:nrow(job_timelines))
+job_timelines$date <- as.Date(job_timelines$date, "%m/%d/%y")
+job_timelines$unk_rejected <- as.Date(job_timelines$unk_rejected, "%m/%d/%y")
+job_timelines$vid_interview <- as.Date(job_timelines$vid_interview, "%m/%d/%y")
+job_timelines$live_interview <- as.Date(job_timelines$live_interview, "%m/%d/%y")
+job_timelines$rejected <- as.Date(job_timelines$rejected, "%m/%d/%y")
+job_timelines$accepted <- as.Date(job_timelines$accepted, "%m/%d/%y")
+job_timelines$passed <- as.Date(job_timelines$passed, "%m/%d/%y")
+```
+
+
+```{r tally some groups}
+paste("Total number of applications:", nrow(subset(job_timelines)))
+
+paste("Number that never got back to me:", nrow(subset(job_timelines, !is.na(unk_rejected) & is.na(vid_interview) & is.na(live_interview))))
+paste("Number that rejected me outright:", nrow(subset(job_timelines, !is.na(rejected) & is.na(vid_interview) & is.na(live_interview))))
+paste("Number that rejected me after skype interview:", nrow(subset(job_timelines, !is.na(rejected) & !is.na(vid_interview) & is.na(live_interview))))
+paste("Number that never got back to me after the skype interview:", nrow(subset(job_timelines, !is.na(unk_rejected) & !is.na(vid_interview) & is.na(live_interview))))
+paste("Number that rejected me after a live interview:", nrow(subset(job_timelines, !is.na(rejected) & !is.na(live_interview))))
+paste("Number that never got back to me after the live interview:", nrow(subset(job_timelines, !is.na(unk_rejected) & !is.na(live_interview))))
+paste("Number that I withdrew application:", nrow(subset(job_timelines, !is.na(passed))))
+paste("Number that I accepted:", nrow(subset(job_timelines, !is.na(accepted))))
+
+summary_dataframe <- data.frame("group" = c("no response","rejected outright","rejected after video interview","no response after video interview","rejected after live interview","no response after live interview","offer","withdrawn"),
+                                "number" = c(
+                                  nrow(subset(job_timelines, !is.na(unk_rejected) & is.na(vid_interview) & is.na(live_interview))),
+                                  nrow(subset(job_timelines, !is.na(rejected) & is.na(vid_interview) & is.na(live_interview))),
+                                  nrow(subset(job_timelines, !is.na(rejected) & !is.na(vid_interview) & is.na(live_interview))),
+                                  nrow(subset(job_timelines, !is.na(unk_rejected) & !is.na(vid_interview) & is.na(live_interview))),
+                                  nrow(subset(job_timelines, !is.na(rejected) & !is.na(live_interview))),
+                                  nrow(subset(job_timelines, !is.na(unk_rejected) & !is.na(live_interview))),
+                                  nrow(subset(job_timelines, !is.na(accepted))),
+                                  nrow(subset(job_timelines, !is.na(passed)))
+                                ))
+
+summary_dataframe$group <- factor(summary_dataframe$group, level = c("no response","rejected outright","rejected after video interview","no response after video interview","rejected after live interview","no response after live interview","offer","withdrawn"))
+
+Academic_job_result_bargraph <- ggplot() + theme_classic() + xlab(NULL) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust = 0.5)) +
+  scale_y_continuous(expand = c(0,0)) +
+  ylab("Number of results") +
+  geom_bar(data = summary_dataframe, aes(x = group, y = number), stat = "identity", fill = "grey80", color = "black")
+ggsave(file = "Academic_job_result_bargraph.png", Academic_job_result_bargraph, height = 3, width = 5)
+```
+
+```{r More Analyses}
+unknown <- subset(job_timelines, !is.na(unk_rejected))
+rejected <- subset(job_timelines, !is.na(rejected))
+video <- subset(job_timelines, !is.na(vid_interview))
+live <- subset(job_timelines, !is.na(live_interview))
+accepted <- subset(job_timelines, !is.na(accepted))
+passed <- subset(job_timelines, !is.na(passed))
+
+job_search_timeline_plot <- ggplot() + theme_classic() + scale_y_continuous(expand = c(0,1)) +
+  xlab(NULL) + ylab(NULL) +
+  geom_segment(data = unknown, aes(x = date, xend = unk_rejected, y = number, yend = number), alpha = 0.5) +
+  geom_segment(data = passed, aes(x = date, xend = passed, y = number, yend = number), alpha = 0.5) +
+  geom_segment(data = rejected, aes(x = date, xend = rejected, y = number, yend = number), color = "red") +
+  geom_segment(data = live, aes(x = date, xend = live_interview, y = number, yend = number), color  = "blue") +
+  geom_segment(data = video, aes(x = date, xend = vid_interview, y = number, yend = number), color  = "cyan") +
+  geom_segment(data = accepted, aes(x = live_interview, xend = accepted, y = number, yend = number), color  = "black") +
+  geom_point(data = accepted, aes(x = accepted, y = number), size = 0.5) +
+  geom_point(data = passed, aes(x = passed, y = number), size = 0.5, color = "red") +
+  geom_point(data = rejected, aes(x = rejected, y = number), shape = 21, size = 0.5, color = "red")
+ggsave(file = "Job_search_timeline_plot.pdf", job_search_timeline_plot, height = 6, width = 5)
+ggsave(file = "Job_search_timeline_plot.png", job_search_timeline_plot, height = 6, width = 5)
+job_search_timeline_plot
+```
+
+```{r Figuring out how time after application associates with outcome}
+video$video_date_diff <- video$vid_interview - video$date
+live$live_date_diff <- live$live_interview - live$date
+rejected$rejected_date_diff <- rejected$rejected - rejected$date
+
+distributions <- data.frame("type" = c(rep("Video interview",nrow(video)),
+                                       rep("Live interview",nrow(live)),
+                                       rep("Rejected",nrow(rejected))), 
+                            "date" = c(video$video_date_diff,
+                                       live$live_date_diff,
+                                       rejected$rejected_date_diff))
+
+Time_after_application_plot <- ggplot() + theme_classic() +
+  ylab("Number of interviews") +
+  xlab("Days contacted after submission") +
+  scale_x_continuous(breaks = seq(30,360,30), expand = c(0,0.5)) +
+  scale_y_continuous(expand = c(0,0.01), breaks = seq(0,8,2)) +
+  geom_hline(yintercept = 0) +
+  geom_histogram(data = distributions, aes(x = date), binwidth = 14, fill = "grey75", color = "black") +
+  facet_grid(rows = vars(type), scales = "free_y")
+ggsave("Time_after_application_plot.pdf", Time_after_application_plot, height = 5, width = 5)
+ggsave("Time_after_application_plot.png", Time_after_application_plot, height = 5, width = 5)
+Time_after_application_plot
+```
